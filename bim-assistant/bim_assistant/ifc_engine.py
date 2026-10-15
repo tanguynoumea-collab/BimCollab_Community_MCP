@@ -138,6 +138,7 @@ class LoadedModel:
     _index: PropertyIndex | None = None
     _summary: dict | None = None
     last_used: float = 0.0
+    geom: object = None      # geometry.GeomSet, built on first geometric query; evicted with the model
 
     def __post_init__(self):
         self._index_lock = threading.Lock()

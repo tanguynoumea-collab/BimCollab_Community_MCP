@@ -7,7 +7,11 @@ name = "bim-assistant"
 version = "0.1.0"
 description = "MCP server: analyse IFC models (IfcOpenShell) and drive BIMcollab Zoom"
 requires-python = ">=3.11"
-dependencies = ["ifcopenshell>=0.8", "mcp>=2", "openpyxl", "cli-anything-bczoom", "pywinauto>=0.6.8; sys_platform == 'win32'", "pillow>=10", "pywin32>=306; sys_platform == 'win32'"]
+dependencies = ["ifcopenshell>=0.8", "mcp>=2", "openpyxl", "cli-anything-bczoom", "pywinauto>=0.6.8; sys_platform == 'win32'", "pillow>=10", "pywin32>=306; sys_platform == 'win32'",
+    "numpy>=1.26", "shapely>=2", "psutil>=5.9", "manifold3d>=3", "python-fcl>=0.7", "rtree>=1.2"]
+
+[project.optional-dependencies]
+render = ["pyvista>=0.44"]
 
 [project.scripts]
 bim-assistant = "bim_assistant.server:main"

@@ -19,6 +19,7 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver import Image
 from mcp.server.mcpserver.exceptions import ToolError
 
+from bim_assistant import geometry as geo
 from bim_assistant import ifc_engine as ie
 from bim_assistant import zoom_bridge as zb
 from cli_anything.bczoom.core import library as lib
@@ -41,6 +42,14 @@ Rapidité : préférer un outil existant à un script ad hoc. Métré par matér
 ifc_quantities(quantity_names=['NetVolume'], material_contains='Béton', also_type_name=True,
 group_by=['class','type.Name']). Matériau effectif (occurrence / hérité du type / aucun, constituants
 dépliés) : ifc_materials. Comparaisons insensibles aux accents et à la casse.
+
+Géométrie réelle (maillages Body, en m / m² / m³, coordonnées monde) : ifc_geometry (volumes,
+surfaces, surfaces latérales, emprise, hauteurs ; compare_qto=true signale les Qto faux),
+ifc_distance, ifc_nearby, ifc_contact_area (surfaces nettes : jonctions, bande sous faux plancher,
+plénum), ifc_clearance (hauteurs libres). Préférer ces outils à un script ad hoc. Les maillages sont
+mis en cache (mémoire + disque) : le premier appel sur une maquette tessellise, les suivants sont
+immédiats. Garde-fous : un calcul à la fois, 4 threads, budget RAM, nombre d'éléments plafonné ;
+sur une grosse maquette, restreindre le sélecteur (classes, étage) plutôt que tout calculer.
 
 Méthode recommandée : ifc_open -> ifc_summary -> ifc_properties_catalog (pour savoir quelles infos
 existent) -> ifc_count / ifc_query / ifc_quantities / ifc_audit -> si utile, matérialiser le
@@ -261,6 +270,64 @@ def ifc_export_table(model: str, output: str, selector: str = "IfcElement",
                      fields: list[str] | None = None) -> dict:
     """Export selected elements and fields to .xlsx or .csv (no row limit)."""
     return ie.export_table(_lm(model), selector, fields, output)
+
+
+# ---------------------------------------------------------------------------
+# IFC geometry (measured on the Body meshes)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def ifc_geometry(model: str, selector: str = "IfcElement", metrics: list[str] | None = None,
+                 group_by: str | list[str] = "class", compare_qto: bool = False,
+                 qto_tolerance: float = 0.05, limit: int = 50) -> dict:
+    """Real geometric measures from the 3D Body (not the Qto written by the authoring tool), per
+    group: metrics among volume, area, lateral_area (vertical faces), top_area, bottom_area,
+    footprint, height, bbox (default: volume, area, lateral_area, height). compare_qto=True lists
+    elements whose Qto NetVolume differs from the geometry by more than qto_tolerance (wrong
+    exports). Meshes are cached (memory + disk): later geometric calls on the model are instant."""
+    return geo.geometry(_lm(model), selector, metrics, group_by, compare_qto, qto_tolerance, limit)
+
+
+@mcp.tool()
+def ifc_distance(model: str, guid_a: str, guid_b: str, model_b: str | None = None) -> dict:
+    """Minimum distance between two elements (same or different models), with nearest points;
+    when they touch/interpenetrate: status contact/overlap with the overlap volume and depth."""
+    return geo.distance(_lm(model), guid_a, guid_b, _lm(model_b) if model_b else None)
+
+
+@mcp.tool()
+def ifc_nearby(model: str, guid: str, within_m: float = 0.5, selector: str = "IfcElement",
+               other_model: str | None = None, limit: int = 50) -> dict:
+    """Elements (of selector, in model or other_model) closer than within_m to an element,
+    sorted by distance, with contact/overlap status."""
+    return geo.nearby(_lm(model), guid, within_m, selector,
+                      _lm(other_model) if other_model else None, limit)
+
+
+@mcp.tool()
+def ifc_contact_area(model: str, selector_a: str, selector_b: str = "IfcElement",
+                     other_model: str | None = None, group_by: str | list[str] = "type.Name",
+                     tolerance_m: float = 0.01, floor_selector: str | None = None,
+                     ceiling_selector: str | None = None, limit: int = 50) -> dict:
+    """Net vertical-face area of the A elements (e.g. partitions to paint): gross lateral area
+    (both faces) minus faces covered by B elements (junctions with other walls, linings, columns:
+    coplanar opposite faces within tolerance_m), minus the band below the top of floor_selector
+    elements (raised floor, screed) and above the underside of ceiling_selector elements
+    (plenum). Example: selector_a="IfcWall, type.Name=/.*PLATRE.*/",
+    floor_selector="IfcCovering, PredefinedType=FLOORING", ceiling_selector="IfcCovering, PredefinedType=CEILING"."""
+    return geo.contact_area(_lm(model), selector_a, selector_b, _lm(other_model) if other_model else None,
+                            group_by, tolerance_m, floor_selector, ceiling_selector, limit)
+
+
+@mcp.tool()
+def ifc_clearance(model: str, floor_selector: str = "IfcSlab", obstacle_selector: str = "IfcElement",
+                  other_model: str | None = None, grid_m: float = 1.0, max_rays: int = 20000,
+                  group_by: str | list[str] = "storey.Name", limit: int = 20) -> dict:
+    """Clear heights: vertical rays on a grid_m grid from the top of the floor elements up to the
+    first obstacle (obstacle_selector, in model or other_model, e.g. ducts of the MEP model).
+    Returns min / 5th percentile / median / max per group and the lowest points with the obstacle."""
+    return geo.clearance(_lm(model), floor_selector, obstacle_selector, grid_m, max_rays, group_by,
+                         limit, _lm(other_model) if other_model else None)
 
 
 # ---------------------------------------------------------------------------

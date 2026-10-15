@@ -59,7 +59,7 @@ Step "Installation des paquets (quelques minutes la première fois : ifcopenshel
 & $venvPy -m pip install --upgrade pip --quiet
 & $venvPy -m pip install --quiet -e "$Root\bimcollab-zoom\agent-harness[live,test]"
 if ($LASTEXITCODE -ne 0) { throw "Échec d'installation de cli-anything-bczoom" }
-& $venvPy -m pip install --quiet -e "$Root\bim-assistant"
+& $venvPy -m pip install --quiet -e "$Root\bim-assistant[render]"
 if ($LASTEXITCODE -ne 0) { throw "Échec d'installation de bim-assistant" }
 Ok "cli-anything-bczoom + bim-assistant installés"
 
