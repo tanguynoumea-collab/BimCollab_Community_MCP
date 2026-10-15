@@ -653,6 +653,101 @@ def _import(path: str, pid: int | None, kind: str | None, timeout: float) -> dic
     return _result(sess, file=str(src), kind=kind)
 
 
+# Issues panel (research axis 2: names read from Zoom 9.5's resources; to confirm live)
+ISSUES_MENU = "ddb_IssuesManagement"
+IMPORT_BCF_ID = "tbmi_BC_ImportBCF"
+IMPORT_BCF_LABELS = ("Importer un fichier BCF", "Importer un fichier BCF...", "Import BCF file",
+                     "Import BCF file...", "BCF-Datei importieren", "BCF-bestand importeren")
+NO_LABELS = ("Non", "No", "Nein", "Nee")
+CANCEL_LABELS = ("Annuler", "Cancel", "Abbrechen", "Annuleren")
+DISCONNECT_LABELS = ("Se déconnecter", "Déconnecter", "Disconnect", "Log out", "Abmelden", "Trennen",
+                     "Afmelden", "Verbinding verbreken")
+
+
+def _cloud_connected(main) -> bool:
+    """Heuristic: a visible disconnect/log-out control means a BIMcollab cloud project is open."""
+    for label in DISCONNECT_LABELS:
+        for d in _find_all(main, name=label):
+            try:
+                if d.is_visible() and d.rectangle().width() > 0:
+                    return True
+            except Exception:  # noqa: BLE001
+                continue
+    return False
+
+
+def _message_boxes(pid: int, main) -> list:
+    """Modal dialogs that are not file dialogs (questions, warnings)."""
+    return [d for d in _file_dialogs(pid, main) if not _by_id(d, "1148", "Edit") and not _by_id(d, "1001", "Edit")]
+
+
+def _answer(dlg, labels: tuple[str, ...]) -> bool:
+    for label in labels:
+        b = next(iter(_find_all(dlg, name=label, control_type="Button", first=True)), None)
+        if b is not None:
+            b.invoke()
+            return True
+    return False
+
+
+def import_bcf(path: str, pid: int | None = None, timeout: float = 60, on_unsaved: str = "abort",
+               allow_cloud: bool = False) -> dict:
+    """Import a BCF (.bcf/.bcfzip, 2.0/2.1) into the Issues panel of the open session.
+
+    Zoom keeps imported issues locally (offline BCF mode); it cannot mix them with a connected
+    BIMcollab cloud project, so this refuses when one seems connected (allow_cloud=True to force).
+    If Zoom asks to save the current issues first: on_unsaved="abort" cancels the import,
+    "discard" answers No (the current offline issues are replaced). Never answers Yes.
+    """
+    src = Path(path).resolve()
+    if not src.exists():
+        raise ZoomBackendError(f"File not found: {src}")
+    if src.suffix.lower() not in (".bcf", ".bcfzip"):
+        raise ZoomBackendError("Expected a .bcf or .bcfzip file")
+    if on_unsaved not in ("abort", "discard"):
+        raise ZoomBackendError("on_unsaved must be 'abort' or 'discard'")
+    sess, main = _connect(pid)
+    pid_ = sess["pid"]
+    _open_tab(main, "issues")
+    time.sleep(0.5)
+    if not allow_cloud and _cloud_connected(main):
+        raise ZoomBackendError("A BIMcollab cloud project seems connected in Zoom: importing a BCF would "
+                               "switch the session to offline issues. Disconnect first, or pass "
+                               "allow_cloud=True after the user agreed.")
+    if not any(_by_id(d, "1148", "Edit") for d in _file_dialogs(pid_, main)):
+        dd = _wait(lambda: _by_id(main, ISSUES_MENU), 5)
+        if dd is None:
+            raise ZoomBackendError(f"Issues menu {ISSUES_MENU} not found (open the Problèmes tab once?).")
+        item = None
+        for _ in range(3):
+            _click(dd)
+            item = _wait(lambda: _popup_item(pid_, IMPORT_BCF_LABELS) or next(
+                (x for w in _process_windows(pid_) for x in _find_all(w, auto_id=IMPORT_BCF_ID, first=True)
+                 if x.is_visible()), None), 3)
+            if item is not None:
+                break
+        if item is None:
+            raise ZoomBackendError("'Import BCF file' entry not found in the issues menu.")
+        time.sleep(0.6)
+        _click(item)
+        # optional question: save the current issues to BCF before continuing?
+        q = _wait(lambda: next(iter(_message_boxes(pid_, main)), None) or
+                  next((d for d in _file_dialogs(pid_, main) if _by_id(d, "1148", "Edit")), None), 10)
+        if q is not None and not _by_id(q, "1148", "Edit"):
+            text = _dialog_text(q)
+            if on_unsaved == "discard" and _answer(q, NO_LABELS):
+                pass
+            else:
+                _answer(q, CANCEL_LABELS) or _answer(q, NO_LABELS)
+                return {"ok": False, "pid": pid_, "model": sess["model"], "file": str(src),
+                        "dialog": text, "error": "Zoom asked to save the current issues first; import "
+                        "cancelled. Retry with on_unsaved='discard' if the user agrees to replace them."}
+    err = _fill_file_dialog(pid_, main, str(src), "1148", timeout)
+    if err:
+        return {"ok": False, "pid": pid_, "model": sess["model"], "file": str(src), **err}
+    return _result(sess, file=str(src), kind="bcf")
+
+
 def export_library(kind: str, output: str, pid: int | None = None, force: bool = False,
                    timeout: float = 20, sets: list[str] | None = None) -> dict:
     """Export the session's local library of `kind` through Zoom's Export menu

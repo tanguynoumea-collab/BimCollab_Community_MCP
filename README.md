@@ -69,8 +69,9 @@ Si Zoom est installé ailleurs que dans le dossier par défaut, définissez la v
 |---|---|
 | Analyse IFC | `ifc_open`, `ifc_summary`, `ifc_spatial_tree`, `ifc_properties_catalog`, `ifc_count`, `ifc_distinct_values`, `ifc_query`, `ifc_element`, `ifc_quantities` (Qto par classe/type/matériau), `ifc_materials`, `ifc_audit`, `ifc_compare`, `ifc_export_table`, `ifc_list_models`, `ifc_close` |
 | Géométrie réelle | `ifc_geometry` (volumes, surfaces, surfaces latérales, emprise, hauteurs ; `compare_qto` détecte les Qto faux), `ifc_distance`, `ifc_nearby`, `ifc_contact_area` (surfaces nettes : jonctions, bande sous faux plancher, plénum), `ifc_clearance` (hauteurs libres) |
+| Clash par l'agent | `ifc_clash` : sélecteurs libres sur une ou deux maquettes, modes `hard` / `clearance` / `touch` / `duplicate`, inclusions totales détectées, profondeur et volume exacts, regroupement ; `bcf_output` écrit un **BCF 2.1** (une issue par groupe, point de vue + image rendue hors écran) |
 | Fichiers Zoom | `zoom_smartview_create`, `zoom_smartview_color_by_values`, `zoom_list_create`, `zoom_smartproperty_create`, `zoom_clash_rule_create`, `zoom_project_create`, `zoom_library_summary`, `zoom_install_library`, `zoom_ifc_type`, `zoom_status`, `zoom_open`, `zoom_nightshift_run` |
-| Session Zoom ouverte | `zoom_live_sessions`, `zoom_live_import` (avec `show`), `zoom_live_show_view`, `zoom_live_export`, `zoom_live_delete_set`, `zoom_live_run_list`, `zoom_live_run_clash`, `zoom_live_tab`, `zoom_live_menus`, `zoom_live_menu`, `zoom_live_tools`, `zoom_live_tool`, `zoom_live_search`, `zoom_live_screenshot` |
+| Session Zoom ouverte | `zoom_live_sessions`, `zoom_live_import` (avec `show`), `zoom_live_import_bcf` (onglet Problèmes), `zoom_clash_run` (règle de clash Zoom créée, importée et lancée en un appel), `zoom_live_show_view`, `zoom_live_export`, `zoom_live_delete_set`, `zoom_live_run_list`, `zoom_live_run_clash`, `zoom_live_tab`, `zoom_live_menus`, `zoom_live_menu`, `zoom_live_tools`, `zoom_live_tool`, `zoom_live_search`, `zoom_live_screenshot` |
 
 Le CLI s'utilise aussi seul. Exemples :
 
@@ -95,6 +96,7 @@ Toutes les commandes sont listées dans le [SKILL.md](.claude/skills/cli-anythin
 - **Zoom n'est jamais relancé** s'il est déjà ouvert, car cela créerait une seconde instance vide.
 - **Aucun écrasement.** Les fichiers de bibliothèque de Zoom (`%APPDATA%\KUBUS\…`) ne sont jamais modifiés pendant que Zoom tourne : l'import live crée un nouvel ensemble.
 - **Nightshift.** La commande `nightshift run` refuse de s'exécuter si Zoom est ouvert. Elle refuse aussi les scripts qui écrivent dans le cloud BIMcollab, sauf avec `--yes`.
+- **Import BCF.** Les issues importées dans Zoom sont locales (hors ligne) : `zoom_live_import_bcf` refuse si un projet BIMcollab Cloud semble connecté, et n'écrase jamais les issues existantes sans accord (`on_unsaved`).
 - **Suppressions.** `zoom_live_delete_set` n'agit que sur demande explicite.
 
 ## Ressources (calculs géométriques)

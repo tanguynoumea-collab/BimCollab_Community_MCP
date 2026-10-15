@@ -19,6 +19,7 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver import Image
 from mcp.server.mcpserver.exceptions import ToolError
 
+from bim_assistant import clash as clash_mod
 from bim_assistant import geometry as geo
 from bim_assistant import ifc_engine as ie
 from bim_assistant import zoom_bridge as zb
@@ -50,6 +51,16 @@ plénum), ifc_clearance (hauteurs libres). Préférer ces outils à un script ad
 mis en cache (mémoire + disque) : le premier appel sur une maquette tessellise, les suivants sont
 immédiats. Garde-fous : un calcul à la fois, 4 threads, budget RAM, nombre d'éléments plafonné ;
 sur une grosse maquette, restreindre le sélecteur (classes, étage) plutôt que tout calculer.
+
+Clashs, deux moteurs au choix :
+- Zoom : zoom_clash_run (règle .bcr générique + import + exécution en un appel) quand les règles
+  Zoom suffisent ; Zoom crée lui-même les problèmes et leurs images.
+- Agent : ifc_clash (sélecteurs libres sur une ou deux maquettes, modes hard / clearance / touch /
+  duplicate, inclusions totales détectées, profondeur et volume exacts) pour les demandes de niche ;
+  bcf_output=...bcf écrit un BCF 2.1 (une issue par groupe, point de vue + image), puis
+  zoom_live_import_bcf l'ouvre dans l'onglet Problèmes. Les issues importées sont locales (hors
+  ligne) : refus si un projet cloud BIMcollab est connecté, sauf accord explicite de l'utilisateur.
+Associer les maquettes du même bâtiment/lot (comparer les étages) avant de lancer un clash.
 
 Méthode recommandée : ifc_open -> ifc_summary -> ifc_properties_catalog (pour savoir quelles infos
 existent) -> ifc_count / ifc_query / ifc_quantities / ifc_audit -> si utile, matérialiser le
@@ -330,6 +341,24 @@ def ifc_clearance(model: str, floor_selector: str = "IfcSlab", obstacle_selector
                          limit, _lm(other_model) if other_model else None)
 
 
+@mcp.tool()
+def ifc_clash(model_a: str, selector_a: str, model_b: str | None = None, selector_b: str | None = None,
+              mode: str = "hard", tolerance_m: float = 0.002, clearance_m: float = 0.05,
+              min_volume_m3: float = 0.0, ignore_same_type: bool = False, group_by: str = "none",
+              limit: int = 100, bcf_output: str | None = None, snapshots: bool = True,
+              rule_name: str | None = None, max_topics: int = 300) -> dict:
+    """Clash detection computed by the assistant (no Zoom needed), for niche requests Zoom's rules
+    cannot express: any selector (class, type, pset value, storey...) on one or two models.
+    mode: hard (interpenetration deeper than tolerance_m; also finds full containments), clearance
+    (closer than clearance_m), touch, duplicate. group_by: none | element_a | element_b | storey |
+    types. Returns counts, worst cases (depth, volume, world point) per group.
+    bcf_output='...\\x.bcf' also writes a BCF 2.1 for Zoom (one topic per group, viewpoint with the
+    two elements selected and coloured red/blue, rendered snapshot); then zoom_live_import_bcf."""
+    return clash_mod.clash(_lm(model_a), selector_a, _lm(model_b) if model_b else None, selector_b, mode,
+                           tolerance_m, clearance_m, min_volume_m3, ignore_same_type, group_by, limit,
+                           bcf_output, snapshots, rule_name, max_topics)
+
+
 # ---------------------------------------------------------------------------
 # Zoom
 # ---------------------------------------------------------------------------
@@ -456,7 +485,7 @@ def zoom_nightshift_run(models: list[str], space: str | None = None, project_nam
 
 def _live_checked(res: dict) -> dict:
     if not res.get("ok", True):
-        raise ToolError(f"{res.get('error')} Dialogs: {res.get('dialogs')}")
+        raise ToolError(f"{res.get('error')} Dialogs: {res.get('dialogs') or res.get('dialog')}")
     return res
 
 
@@ -475,6 +504,33 @@ def zoom_live_import(path: str, show: bool = True, view: str | None = None,
     if show_arg is not None and Path(path).suffix.lower() != ".bcsv":
         show_arg = None
     return _live_checked(zl.import_library(path, pid=pid, kind=kind, show=show_arg))
+
+
+@mcp.tool()
+def zoom_live_import_bcf(path: str, on_unsaved: str = "abort", allow_cloud: bool = False,
+                         pid: int | None = None) -> dict:
+    """Import a BCF 2.x (e.g. from ifc_clash) into the Issues (Problèmes) panel of the open Zoom
+    session. Zoom keeps them as local offline issues: refused when a BIMcollab cloud project seems
+    connected (allow_cloud=true only after the user agreed). If Zoom asks to save its current
+    issues first, on_unsaved='abort' cancels; 'discard' (only with the user's consent) replaces them."""
+    return _live_checked(zl.import_bcf(path, pid=pid, on_unsaved=on_unsaved, allow_cloud=allow_cloud))
+
+
+@mcp.tool()
+def zoom_clash_run(library: str, set_name: str, title: str, source: list[dict], target: list[dict],
+                   min_distance_m: float = 0.0, same_model: bool = True, check_distance: bool = False,
+                   replace: bool = True, pid: int | None = None) -> dict:
+    """Zoom engine in one call: write the clash rule (.bcr, generic rules), import it into the open
+    session and run it; results appear in Zoom's Conflits panel (Zoom makes the issues and their
+    images). Use ifc_clash instead when Zoom's rules cannot express the request."""
+    made = zb.clash_rule_create(library, set_name, title, source, target, min_distance_m, same_model,
+                                check_distance, replace)
+    before = zl._set_titles(pid, kind="clashrules")
+    imp = _live_checked(zl.import_library(library, pid=pid, kind="clashrules"))
+    added = [t for t in zl._set_titles(pid, kind="clashrules") if t not in before]
+    set_title = next((t for t in added if t == set_name or t.startswith(set_name + " (")), set_name)
+    run = zl.run_clash(title, set_name=set_title, pid=pid)
+    return {"rule_file": made, "imported": imp, "set": set_title, "run": run}
 
 
 @mcp.tool()

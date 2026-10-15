@@ -233,6 +233,26 @@ def live_import(path, pid, kind, timeout, show):
          + (f"; showing '{res['shown']['view']}'" if res.get("shown") else ""))
 
 
+@live.command("import-bcf")
+@click.argument("path")
+@click.option("--pid", type=int, default=None)
+@click.option("--timeout", type=float, default=60)
+@click.option("--on-unsaved", type=click.Choice(["abort", "discard"]), default="abort",
+              help="If Zoom asks to save its current issues first: abort (default) or discard them")
+@click.option("--allow-cloud", is_flag=True, help="Import even if a BIMcollab cloud project seems connected")
+@_guard
+def live_import_bcf(path, pid, timeout, on_unsaved, allow_cloud):
+    """Import a BCF 2.x file into the Issues panel of the open Zoom session."""
+    from cli_anything.bczoom.utils import zoom_live
+    res = zoom_live.import_bcf(path, pid=pid, timeout=timeout, on_unsaved=on_unsaved, allow_cloud=allow_cloud)
+    if not res["ok"]:
+        if _json_mode():
+            click.echo(json.dumps(res, indent=2, ensure_ascii=False))
+            sys.exit(1)
+        fail(f"{res['error']} {res.get('dialog') or res.get('dialogs')}")
+    emit(res, f"Imported {res['file']} into the issues of Zoom PID {res['pid']} ({res['model']})")
+
+
 @live.command("show-view")
 @click.argument("view")
 @click.option("--set", "set_name", default=None, help="Smart view set (needed if the title is ambiguous)")

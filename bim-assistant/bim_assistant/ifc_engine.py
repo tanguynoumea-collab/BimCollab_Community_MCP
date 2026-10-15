@@ -745,7 +745,9 @@ def spatial_tree(lm) -> dict:
                     if c.is_a("IfcSpatialElement") or c.is_a("IfcSpatialStructureElement")]
         if children and depth < 6:
             spaces = [c for c in children if c.is_a("IfcSpace")]
-            others = [c for c in children if not c.is_a("IfcSpace")]
+            # RelatedObjects is an unordered SET: sort storeys by elevation, others by name
+            others = sorted((c for c in children if not c.is_a("IfcSpace")),
+                            key=lambda c: (getattr(c, "Elevation", None) or 0.0, c.Name or ""))
             n["children"] = [node(c, depth + 1) for c in others]
             if spaces:
                 n["spaces"] = len(spaces)
