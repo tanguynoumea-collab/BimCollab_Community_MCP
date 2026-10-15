@@ -102,6 +102,10 @@ Toutes les commandes sont listées dans le [SKILL.md](.claude/skills/cli-anythin
 - Zoom n'offre pas d'API : le pilotage live dépend de son interface et peut nécessiter une adaptation après une mise à jour de Zoom.
 - Les métrés sont calculés depuis l'IFC. Leur qualité dépend de celle de la maquette, notamment des quantités `Qto` et des matériaux.
 
+## Licence
+
+[MIT](LICENSE) : utilisation, modification et redistribution libres, sans garantie.
+
 ## Tests
 
 ```powershell
