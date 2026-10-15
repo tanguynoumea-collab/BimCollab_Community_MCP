@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bim-assistant"
+version = "0.1.0"
+description = "MCP server: analyse IFC models (IfcOpenShell) and drive BIMcollab Zoom"
+requires-python = ">=3.11"
+dependencies = ["ifcopenshell>=0.8", "mcp>=2", "openpyxl", "cli-anything-bczoom", "pywinauto>=0.6.8; sys_platform == 'win32'", "pillow>=10", "pywin32>=306; sys_platform == 'win32'"]
+
+[project.scripts]
+bim-assistant = "bim_assistant.server:main"
+
+[tool.setuptools]
+packages = ["bim_assistant"]
+
+[tool.pytest.ini_options]
+markers = ["gui: starts the real BIMcollab Zoom (Zoom must be closed)"]
+addopts = "-m 'not gui'"
