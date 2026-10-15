@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Installe BimCollab Community MCP : CLI BIMcollab Zoom + serveur MCP "bim-assistant" pour Claude Code.
 
@@ -104,7 +104,7 @@ if ($Scope -eq "user") {
 
 # --- 5. Vérification ---------------------------------------------------------------------------
 Step "Vérification"
-& $venvPy -c "import bim_assistant.server, cli_anything.bczoom.utils.zoom_live; print('imports OK')"
+& $venvPy -c "import bim_assistant.server, cli_anything.bczoom.utils.zoom_live; print('imports OK')" 2>$null
 $cli = Join-Path $Root ".venv\Scripts\cli-anything-bczoom.exe"
 $info = & $cli --json app info 2>$null
 if ($LASTEXITCODE -eq 0) { Ok "BIMcollab Zoom détecté"; Write-Host $info } else { Warn "BIMcollab Zoom non détecté (installez-le ou définissez BCZOOM_EXE). L'analyse IFC fonctionne quand même." }
